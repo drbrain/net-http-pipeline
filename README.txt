@@ -13,15 +13,16 @@ proof of concept.
 * Provides HTTP/1.1 pipelining
 * Does not implement request wrangling per RFC 2616 8.1.2.2
 * Does not handle errors
+* May not work on Ruby 1.8, untested
 
 == SYNOPSIS:
 
   require 'net/http/pipeline'
-  
+
   Net::HTTP.start 'localhost' do |http|
     req1 = Net::HTTP::Get.new '/'
     req2 = Net::HTTP::Get.new '/'
-  
+
     http.pipeline req1, req2 do |res|
       puts res.code
       puts res.body[0..60].inspect

@@ -27,7 +27,7 @@ class TestNetHttpPipeline < Test::Unit::TestCase
       @write_io.rewind
     end
 
-    def read bytes, dest = '', ignored
+    def read bytes, dest = '', ignored = nil
       @read_io.read bytes, dest
 
       dest
@@ -132,7 +132,7 @@ User-Agent: Ruby\r
 
     @socket.start
 
-    responses = pipeline req1
+    pipeline req1
 
     @socket.finish
 
