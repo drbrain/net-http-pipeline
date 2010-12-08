@@ -4,6 +4,14 @@ require 'stringio'
 
 class TestNetHttpPipeline < MiniTest::Unit::TestCase
 
+  def setup
+    @curr_http_version = '1.1'
+    @started = true
+
+    @req1 = Net::HTTP::Get.new '/'
+    @req2 = Net::HTTP::Get.new '/'
+  end
+
   ##
   # Net::BufferedIO stub
 
@@ -54,11 +62,6 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
 
   attr_writer :started
 
-  def setup
-    @curr_http_version = '1.1'
-    @started = true
-  end
-
   def D(*) end
 
   def begin_transport req
@@ -88,6 +91,22 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     http_response.join("\r\n") << body
   end
 
+  def request req
+    req.exec @socket, @curr_http_version, edit_path(req.path)
+
+    res = Net::HTTPResponse.read_new @socket
+
+    res.reading_body @socket, req.response_body_permitted? do
+      yield res if block_given?
+    end
+
+    @curr_http_version = res.http_version
+
+    @socket.close unless pipeline_keep_alive? res
+
+    res
+  end
+
   def response
     r = Net::HTTPResponse.allocate
     def r.http_version() Net::HTTP::HTTPVersion end
@@ -100,18 +119,15 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
 
   def started?() @started end
 
+  # tests start
+
   def test_pipeline
     @socket = Buffer.new
-
     @socket.read_io.write http_response('Worked 1!')
     @socket.read_io.write http_response('Worked 2!')
-
-    req1 = Net::HTTP::Get.new '/'
-    req2 = Net::HTTP::Get.new '/'
-
     @socket.start
 
-    responses = pipeline req1, req2
+    responses = pipeline @req1, @req2
 
     @socket.finish
 
@@ -126,30 +142,35 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     assert_equal 'Worked 2!', responses.last.body
   end
 
-  def test_pipeline_connection_close
-    @socket = Buffer.new
-
-    @socket.read_io.write http_response('Worked 1!', 'Connection: close')
-
-    req1 = Net::HTTP::Get.new '/'
-
-    @socket.start
-
-    pipeline req1
-
-    @socket.finish
-
-    assert @socket.closed?
-  end
-
   def test_pipeline_http_1_0
     @curr_http_version = '1.0'
 
-    e = assert_raises Net::HTTP::Pipeline::Error do
-      pipeline
+    @socket = Buffer.new
+    @socket.read_io.write http_response('Worked 1!', 'Connection: close')
+    @socket.start
+
+    e = assert_raises Net::HTTP::Pipeline::VersionError do
+      pipeline @req1, @req2
     end
 
-    assert_equal 'pipelining requires HTTP/1.1 or newer', e.message
+    assert_equal [@req1, @req2], e.requests
+    assert_empty e.responses
+  end
+
+  def test_pipeline_non_persistent
+    @persistent = false
+
+    @socket = Buffer.new
+    @socket.read_io.write http_response('Worked 1!', 'Connection: close')
+    @socket.start
+
+    e = assert_raises Net::HTTP::Pipeline::PersistenceError do
+      pipeline @req1, @req2
+    end
+
+    assert_equal [@req2], e.requests
+    assert_equal 1, e.responses.length
+    assert_equal 'Worked 1!', e.responses.first.body
   end
 
   def test_pipeline_not_started
@@ -161,6 +182,41 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
 
     assert_equal 'Net::HTTP not started', e.message
   end
+
+  def test_pipeline_unknown_http_1_0
+    @socket = Buffer.new
+    @socket.read_io.write <<-HTTP_1_0
+HTTP/1.0 200 OK\r
+Content-Length: 9\r
+\r
+Worked 1!
+    HTTP_1_0
+    @socket.start
+
+    e = assert_raises Net::HTTP::Pipeline::VersionError do
+      pipeline @req1, @req2
+    end
+
+    assert_equal [@req2], e.requests
+    assert_equal 1, e.responses.length
+    assert_equal 'Worked 1!', e.responses.first.body
+  end
+
+  def test_pipeline_unknown_non_persistent
+    @socket = Buffer.new
+    @socket.read_io.write http_response('Worked 1!', 'Connection: close')
+    @socket.start
+
+    e = assert_raises Net::HTTP::Pipeline::PersistenceError do
+      pipeline @req1, @req2
+    end
+
+    assert_equal [@req2], e.requests
+    assert_equal 1, e.responses.length
+    assert_equal 'Worked 1!', e.responses.first.body
+  end
+
+  # end #pipeline tests
 
   def test_pipeline_end_transport
     @curr_http_version = nil

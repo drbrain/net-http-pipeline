@@ -30,6 +30,57 @@ module Net::HTTP::Pipeline
   # Pipeline error class
 
   class Error < RuntimeError
+
+    ##
+    # Remaining requests that have not been sent to the HTTP server
+
+    attr_reader :requests
+
+    ##
+    # Retrieved responses up to the error point
+
+    attr_reader :responses
+
+    ##
+    # Creates a new Error with +message+, a list of +requests+ that have not
+    # been sent to the server and a list of +responses+ that have been
+    # retrieved from the server.
+
+    def initialize message, requests, responses
+      super message
+
+      @requests = requests
+      @responses = responses
+    end
+
+  end
+
+  ##
+  # Raised when an invalid version is given
+
+  class VersionError < Error
+    ##
+    # Creates a new VersionError with +requests+ and +responses+ a list of
+    # +requests+ that have not been sent to the server and a list of
+    # +responses+ that have been retrieved from the server.
+
+    def initialize requests, responses
+      super 'HTTP/1.1 or newer required', requests, responses
+    end
+  end
+
+  ##
+  # Raised when the server appears to not support persistent connections
+
+  class PersistenceError < Error
+    ##
+    # Creates a new PersistenceError with +requests+ and +responses+ a list of
+    # +requests+ that have not been sent to the server and a list of
+    # +responses+ that have been retrieved from the server.
+
+    def initialize requests, responses
+      super 'HTTP/1.1 or newer required', requests, responses
+    end
   end
 
   ##
@@ -40,16 +91,37 @@ module Net::HTTP::Pipeline
   # HTTP session has not been started.
 
   def pipeline *requests
-    raise Error, 'pipelining requires HTTP/1.1 or newer' unless
-      @curr_http_version >= '1.1'
-    raise Error, 'Net::HTTP not started' unless started?
+    responses = []
+
+    raise Error.new('Net::HTTP not started', requests, responses) unless
+      started?
+
+    raise VersionError.new(requests, responses) if '1.1' > @curr_http_version
+
+    @persistent = false unless instance_variable_defined? :@persistent
+
+    unless @persistent then
+      request requests.shift do |res|
+        responses << res
+
+        yield res if block_given?
+
+        @persistent = pipeline_keep_alive? res
+      end
+    end
+
+    return if responses if requests.empty?
+
+    if '1.1' > @curr_http_version then
+      raise VersionError.new(requests, responses)
+    elsif not @persistent then
+      raise PersistenceError.new(requests, responses)
+    end
 
     requests.each do |req|
       begin_transport req
       req.exec @socket, @curr_http_version, edit_path(req.path)
     end
-
-    responses = []
 
     requests.each do |req|
       begin
@@ -92,7 +164,7 @@ module Net::HTTP::Pipeline
     end
   else
     def pipeline_keep_alive? res
-      not /close/i =~ res['connection'].to_s
+      not res['connection'].to_s =~ /close/i
     end
   end
 

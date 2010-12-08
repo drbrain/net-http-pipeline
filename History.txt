@@ -1,3 +1,9 @@
+=== 0.2 / ??
+
+* Minor enhancement
+  * Check for HTTP/1.1 and persistent connections before attempting
+    pipelining
+
 === 0.1 / 2010-12-07
 
 * Minor enhancement
