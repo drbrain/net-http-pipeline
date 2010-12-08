@@ -1,8 +1,8 @@
-require "test/unit"
+require 'minitest/autorun'
 require 'net/http/pipeline'
 require 'stringio'
 
-class TestNetHttpPipeline < Test::Unit::TestCase
+class TestNetHttpPipeline < MiniTest::Unit::TestCase
 
   ##
   # Net::BufferedIO stub
@@ -68,6 +68,16 @@ class TestNetHttpPipeline < Test::Unit::TestCase
     path
   end
 
+  def http_request
+    http_request = []
+    http_request << 'GET / HTTP/1.1'
+    http_request << 'Accept: */*'
+    http_request << 'User-Agent: Ruby' if RUBY_VERSION > '1.9'
+    http_request.push nil, nil
+
+    http_request.join "\r\n"
+  end
+
   def http_response body, *extra_header
     http_response = []
     http_response << 'HTTP/1.1 200 OK'
@@ -105,16 +115,9 @@ class TestNetHttpPipeline < Test::Unit::TestCase
 
     @socket.finish
 
-    expected = <<-EXPECTED
-GET / HTTP/1.1\r
-Accept: */*\r
-User-Agent: Ruby\r
-\r
-GET / HTTP/1.1\r
-Accept: */*\r
-User-Agent: Ruby\r
-\r
-    EXPECTED
+    expected = ''
+    expected << http_request
+    expected << http_request
 
     assert_equal expected, @socket.write_io.read
     refute @socket.closed?

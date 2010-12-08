@@ -13,7 +13,6 @@ proof of concept.
 * Provides HTTP/1.1 pipelining
 * Does not implement request wrangling per RFC 2616 8.1.2.2
 * Does not handle errors
-* May not work on Ruby 1.8, untested
 
 == SYNOPSIS:
 

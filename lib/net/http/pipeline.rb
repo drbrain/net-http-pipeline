@@ -24,7 +24,7 @@ require 'net/http'
 
 module Net::HTTP::Pipeline
 
-  VERSION = '0.0'
+  VERSION = '0.1'
 
   ##
   # Pipeline error class
@@ -83,11 +83,17 @@ module Net::HTTP::Pipeline
     end
   end
 
-  ##
-  # Checks for an connection close header
+  if Net::HTTPResponse.allocate.respond_to? :connection_close? then
+    ##
+    # Checks for an connection close header
 
-  def pipeline_keep_alive? res
-    not res.connection_close?
+    def pipeline_keep_alive? res
+      not res.connection_close?
+    end
+  else
+    def pipeline_keep_alive? res
+      not /close/i =~ res['connection'].to_s
+    end
   end
 
 end
