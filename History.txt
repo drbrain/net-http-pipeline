@@ -3,6 +3,7 @@
 * Minor enhancement
   * Check for HTTP/1.1 and persistent connections before attempting
     pipelining
+  * Added Net::HTTP#persistent= to avoid pipelining-capability check.
 
 === 0.1 / 2010-12-07
 

@@ -4,8 +4,12 @@ require 'net/http'
 # An HTTP/1.1 pipelining implementation atop Net::HTTP.  Currently this is not
 # compliant with RFC 2616 8.1.2.2.
 #
-# Pipeline allows pou to create a bunch of requests then pipeline them to an
-# HTTP/1.1 server.
+# Pipeline allows you to create a bunch of requests then send them all to an
+# HTTP/1.1 server without waiting for responses.  The server will return HTTP
+# responses in-order.
+#
+# Net::HTTP::Pipeline does not assume the server is pipelining-capable.  If
+# you know it is you can set Net::HTTP#persistent to true.
 #
 # = Example
 #
@@ -24,7 +28,10 @@ require 'net/http'
 
 module Net::HTTP::Pipeline
 
-  VERSION = '0.1'
+  ##
+  # The version of net-http-pipeline you are using
+
+  VERSION = '0.2'
 
   ##
   # Pipeline error class
@@ -84,6 +91,18 @@ module Net::HTTP::Pipeline
   end
 
   ##
+  # Persistence accessor.
+  #
+  # Pipeline assumes servers will not make persistent connections by default.
+  # The first request is not pipelined while Pipeline ensures that the server
+  # is HTTP/1.1 or newer and defaults to persistent connections.
+  #
+  # If you know the server is both HTTP/1.1 and defaults to persistent
+  # connections you can set this to true when you create the Net::HTTP object.
+
+  attr_accessor :persistent
+
+  ##
   # Pipelines +requests+ to the HTTP server yielding responses if a block is
   # given.  Returns all responses recieved.
   #
@@ -108,14 +127,14 @@ module Net::HTTP::Pipeline
 
         @persistent = pipeline_keep_alive? res
       end
-    end
 
-    return if responses if requests.empty?
+      return if responses if requests.empty?
 
-    if '1.1' > @curr_http_version then
-      raise VersionError.new(requests, responses)
-    elsif not @persistent then
-      raise PersistenceError.new(requests, responses)
+      if '1.1' > @curr_http_version then
+        raise VersionError.new(requests, responses)
+      elsif not @persistent then
+        raise PersistenceError.new(requests, responses)
+      end
     end
 
     requests.each do |req|
