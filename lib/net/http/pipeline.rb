@@ -269,7 +269,8 @@ module Net::HTTP::Pipeline
     end
 
     responses
-  rescue Net::HTTPBadResponse, Errno::ECONNRESET => e
+  rescue Timeout::Error, EOFError, Errno::ECONNABORTED, Errno::ECONNRESET,
+         Errno::EPIPE, Net::HTTPBadResponse => e
     raise ResponseError.new(e, in_flight, responses)
   end
 
