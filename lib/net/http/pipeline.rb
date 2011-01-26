@@ -69,9 +69,9 @@ module Net::HTTP::Pipeline
 
   class VersionError < Error
     ##
-    # Creates a new VersionError with +requests+ and +responses+ a list of
-    # +requests+ that have not been sent to the server and a list of
-    # +responses+ that have been retrieved from the server.
+    # Creates a new VersionError with a list of +requests+ that have not been
+    # sent to the server and a list of +responses+ that have been retrieved
+    # from the server.
 
     def initialize requests, responses
       super 'HTTP/1.1 or newer required', requests, responses
@@ -83,12 +83,26 @@ module Net::HTTP::Pipeline
 
   class PersistenceError < Error
     ##
-    # Creates a new PersistenceError with +requests+ and +responses+ a list of
-    # +requests+ that have not been sent to the server and a list of
-    # +responses+ that have been retrieved from the server.
+    # Creates a new PersistenceError with a list of +requests+ that have not
+    # been sent to the server and a list of +responses+ that have been
+    # retrieved from the server.
 
     def initialize requests, responses
-      super 'HTTP/1.1 or newer required', requests, responses
+      super 'persistent connections required', requests, responses
+    end
+  end
+
+  ##
+  # Raised when the server appears to not support pipelining connections
+
+  class PipelineError < Error
+    ##
+    # Creates a new PipelineError with a list of +requests+ that have not been
+    # sent to the server and a list of +responses+ that have been retrieved
+    # from the server.
+
+    def initialize requests, responses
+      super 'pipeline connections are not supported', requests, responses
     end
   end
 
@@ -130,8 +144,6 @@ module Net::HTTP::Pipeline
 
     raise VersionError.new(requests, responses) if '1.1' > @curr_http_version
 
-    @pipelining = false unless instance_variable_defined? :@pipelining
-
     pipeline_check requests, responses
 
     until requests.empty? do
@@ -155,7 +167,12 @@ module Net::HTTP::Pipeline
   # persistent connections.
 
   def pipeline_check requests, responses
-    return if @pipelining
+    if instance_variable_defined? :@pipelining then
+      return if @pipelining
+      raise PipelineError.new(requests, responses) unless @pipelining
+    else
+      @pipelining = false
+    end
 
     request requests.shift do |res|
       responses << res

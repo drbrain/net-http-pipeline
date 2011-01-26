@@ -261,6 +261,21 @@ Worked 1!
     assert pipelining
   end
 
+  def test_pipeline_check_again
+    self.pipelining = false
+
+    @socket = Buffer.new
+    @socket.start
+
+    e = assert_raises Net::HTTP::Pipeline::PipelineError do
+      pipeline_check [@get1, @get2], []
+    end
+
+    assert_equal [@get1, @get2], e.requests
+    assert_empty e.responses
+    refute pipelining
+  end
+
   def test_pipeline_check_http_1_0
     @socket = Buffer.new
     @socket.read_io.write <<-HTTP_1_0
