@@ -132,7 +132,7 @@ module Net::HTTP::Pipeline
 
     @pipelining = false unless instance_variable_defined? :@pipelining
 
-    pipeline_check requests, responses unless @pipelining
+    pipeline_check requests, responses
 
     until requests.empty? do
       in_flight = pipeline_send requests
@@ -143,7 +143,20 @@ module Net::HTTP::Pipeline
     responses
   end
 
+  ##
+  # Ensures the connection supports pipelining.
+  #
+  # If the server has not been tested for pipelining support one of the
+  # +requests+ will be consumed and placed in +responses+.
+  #
+  # A VersionError will be raised if the server is not HTTP/1.1 or newer.
+  #
+  # A PersistenceError will be raised if the server does not support
+  # persistent connections.
+
   def pipeline_check requests, responses
+    return if @pipelining
+
     request requests.shift do |res|
       responses << res
 
@@ -151,8 +164,6 @@ module Net::HTTP::Pipeline
 
       @pipelining = pipeline_keep_alive? res
     end
-
-    return if responses if requests.empty?
 
     if '1.1' > @curr_http_version then
       @pipelining = false

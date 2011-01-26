@@ -258,7 +258,7 @@ Worked 1!
     assert_equal [@get2], requests
     assert_equal 1, responses.length
     assert_equal 'Worked 1!', responses.first.body
-    assert @pipelining
+    assert pipelining
   end
 
   def test_pipeline_check_http_1_0
@@ -278,7 +278,7 @@ Worked 1!
     assert_equal [@get2], e.requests
     assert_equal 1, e.responses.length
     assert_equal 'Worked 1!', e.responses.first.body
-    refute @pipelining
+    refute pipelining
   end
 
   def test_pipeline_check_non_persistent
@@ -293,7 +293,22 @@ Worked 1!
     assert_equal [@get2], e.requests
     assert_equal 1, e.responses.length
     assert_equal 'Worked 1!', e.responses.first.body
-    refute @pipelining
+    refute pipelining
+  end
+
+  def test_pipeline_check_pipelining
+    self.pipelining = true
+    @socket = Buffer.new
+    @socket.start
+
+    requests = [@get1, @get2]
+    responses = []
+
+    pipeline_check requests, responses
+
+    assert_equal [@get1, @get2], requests
+    assert_empty responses
+    assert pipelining
   end
 
   def test_pipeline_end_transport
