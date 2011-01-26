@@ -165,6 +165,9 @@ module Net::HTTP::Pipeline
   #
   # A PersistenceError will be raised if the server does not support
   # persistent connections.
+  #
+  # A PipelineError will be raised if the it was previously determined that
+  # the server does not support pipelining.
 
   def pipeline_check requests, responses
     if instance_variable_defined? :@pipelining then
