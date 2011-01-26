@@ -107,6 +107,27 @@ module Net::HTTP::Pipeline
   end
 
   ##
+  # Raised if an error occurs while reading responses.
+
+  class ResponseError < Error
+    ##
+    # The original exception
+
+    attr_accessor :original
+
+    ##
+    # Creates a new ResponseError with an original +exception+, a list of
+    # +requests+ that were in-flight and a list of +responses+ that have been
+    # retrieved from the server.
+
+    def initialize exception, requests, responses
+      @original = exception
+      message = "error handling responses: #{original} (#{original.class})"
+      super message, requests, responses
+    end
+  end
+
+  ##
   # Pipelining capability accessor.
   #
   # Pipeline assumes servers do not support pipelining by default.  The first
@@ -229,20 +250,27 @@ module Net::HTTP::Pipeline
   # +responses+
 
   def pipeline_receive in_flight, responses
-    in_flight.each do |req|
+    while req = in_flight.shift do
       begin
-        res = Net::HTTPResponse.read_new @socket
-      end while res.kind_of? Net::HTTPContinue
+        begin
+          res = Net::HTTPResponse.read_new @socket
+        end while res.kind_of? Net::HTTPContinue
 
-      res.reading_body @socket, req.response_body_permitted? do
-        responses << res
-        yield res if block_given?
+        res.reading_body @socket, req.response_body_permitted? do
+          responses << res
+          yield res if block_given?
+        end
+
+        pipeline_end_transport res
+      rescue
+        in_flight.unshift req
+        raise
       end
-
-      pipeline_end_transport res
     end
 
     responses
+  rescue Net::HTTPBadResponse, Errno::ECONNRESET => e
+    raise ResponseError.new(e, in_flight, responses)
   end
 
   ##

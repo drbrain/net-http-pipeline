@@ -62,6 +62,19 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     end
   end
 
+  class ResetBuffer < Buffer
+    def initialize
+      @readline = false
+      super
+    end
+
+    def readline
+      raise Errno::ECONNRESET if @readline
+      @readline = true
+      super
+    end
+  end
+
   attr_writer :started
 
   def D(*) end
@@ -101,6 +114,15 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     http_response.push nil, nil # Array chomps on #join
 
     http_response.join("\r\n") << body
+  end
+
+  def http_bad_response
+    http_response = []
+    http_response << 'HTP/1.1 200 OK'
+    http_response << 'Content-Length: 0'
+    http_response.push nil, nil # Array chomps on #join
+
+    http_response.join("\r\n")
   end
 
   def request req
@@ -381,6 +403,27 @@ Worked 1!
     assert_equal 'Worked 2!', responses.last.body
 
     assert_same r, responses
+  end
+
+  def test_pipeline_receive_bad_response
+    @socket = ResetBuffer.new
+    @socket.read_io.write http_response('Worked 1!')
+    @socket.start
+
+    in_flight = [@get1, @get2]
+    responses = []
+
+    e = assert_raises Net::HTTP::Pipeline::ResponseError do
+      pipeline_receive in_flight, responses
+    end
+
+    @socket.finish
+
+    assert_equal [@get2], e.requests
+    assert_equal 1, e.responses.length
+    assert_equal 'Worked 1!', e.responses.first.body
+
+    assert_kind_of Errno::ECONNRESET, e.original
   end
 
   def test_pipeline_send
