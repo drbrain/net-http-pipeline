@@ -10,8 +10,10 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     @curr_http_version = '1.1'
     @started = true
 
-    @req1 = Net::HTTP::Get.new '/'
-    @req2 = Net::HTTP::Get.new '/'
+    @get1 = Net::HTTP::Get.new '/'
+    @get2 = Net::HTTP::Get.new '/'
+    @get3 = Net::HTTP::Get.new '/'
+    @post = Net::HTTP::Post.new '/'
   end
 
   ##
@@ -71,14 +73,24 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     path
   end
 
-  def http_request
-    http_request = []
-    http_request << 'GET / HTTP/1.1'
-    http_request << 'Accept: */*'
-    http_request << 'User-Agent: Ruby' if RUBY_VERSION > '1.9'
-    http_request.push nil, nil
+  def http_get
+    get = []
+    get << 'GET / HTTP/1.1'
+    get << 'Accept: */*'
+    get << 'User-Agent: Ruby' if RUBY_VERSION > '1.9'
+    get.push nil, nil
 
-    http_request.join "\r\n"
+    get.join "\r\n"
+  end
+
+  def http_post
+    get = []
+    get << 'POST / HTTP/1.1'
+    get << 'Accept: */*'
+    get << 'User-Agent: Ruby' if RUBY_VERSION > '1.9'
+    get.push nil, nil
+
+    get.join "\r\n"
   end
 
   def http_response body, *extra_header
@@ -140,13 +152,11 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     @socket.read_io.write http_response('Worked 2!')
     @socket.start
 
-    responses = pipeline [@req1, @req2]
+    responses = pipeline [@get1, @get2]
 
     @socket.finish
 
-    expected = ''
-    expected << http_request
-    expected << http_request
+    expected = http_get * 2
 
     assert_equal expected, @socket.write_io.read
     refute @socket.closed?
@@ -163,11 +173,39 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     @socket.start
 
     e = assert_raises Net::HTTP::Pipeline::VersionError do
-      pipeline [@req1, @req2]
+      pipeline [@get1, @get2]
     end
 
-    assert_equal [@req1, @req2], e.requests
+    assert_equal [@get1, @get2], e.requests
     assert_empty e.responses
+  end
+
+  def test_pipeline_non_idempotent
+    @socket = Buffer.new
+    @socket.read_io.write http_response('Worked 1!')
+    @socket.read_io.write http_response('Worked 2!')
+    @socket.read_io.write http_response('Worked 3!')
+    @socket.read_io.write http_response('Worked 4!')
+    @socket.start
+
+    responses = pipeline [@get1, @get2, @post, @get3]
+
+    @socket.finish
+
+    expected = ''
+    expected << http_get * 2
+    expected << http_post
+    expected << http_get
+
+    assert_equal expected, @socket.write_io.read
+    refute @socket.closed?
+
+    assert_equal 'Worked 1!', responses.shift.body
+    assert_equal 'Worked 2!', responses.shift.body
+    assert_equal 'Worked 3!', responses.shift.body
+    assert_equal 'Worked 4!', responses.shift.body
+
+    assert responses.empty?
   end
 
   def test_pipeline_non_persistent
@@ -178,10 +216,10 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     @socket.start
 
     e = assert_raises Net::HTTP::Pipeline::PersistenceError do
-      pipeline [@req1, @req2]
+      pipeline [@get1, @get2]
     end
 
-    assert_equal [@req2], e.requests
+    assert_equal [@get2], e.requests
     assert_equal 1, e.responses.length
     assert_equal 'Worked 1!', e.responses.first.body
   end
@@ -208,12 +246,12 @@ Worked 1!
     HTTP_1_0
     @socket.start
 
-    requests = [@req1, @req2]
+    requests = [@get1, @get2]
     responses = []
 
     pipeline_check requests, responses
 
-    assert_equal [@req2], requests
+    assert_equal [@get2], requests
     assert_equal 1, responses.length
     assert_equal 'Worked 1!', responses.first.body
   end
@@ -229,10 +267,10 @@ Worked 1!
     @socket.start
 
     e = assert_raises Net::HTTP::Pipeline::VersionError do
-      pipeline_check [@req1, @req2], []
+      pipeline_check [@get1, @get2], []
     end
 
-    assert_equal [@req2], e.requests
+    assert_equal [@get2], e.requests
     assert_equal 1, e.responses.length
     assert_equal 'Worked 1!', e.responses.first.body
   end
@@ -243,10 +281,10 @@ Worked 1!
     @socket.start
 
     e = assert_raises Net::HTTP::Pipeline::PersistenceError do
-      pipeline_check [@req1, @req2], []
+      pipeline_check [@get1, @get2], []
     end
 
-    assert_equal [@req2], e.requests
+    assert_equal [@get2], e.requests
     assert_equal 1, e.responses.length
     assert_equal 'Worked 1!', e.responses.first.body
   end
@@ -286,6 +324,43 @@ Worked 1!
     res.header['connection'] = ['close']
 
     refute pipeline_keep_alive? res
+  end
+
+  def test_pipeline_send
+    @socket = Buffer.new
+    @socket.start
+
+    requests = [@get1, @get2, @post, @get3]
+
+    in_flight = pipeline_send requests
+
+    @socket.finish
+
+    assert_equal [@get1, @get2], in_flight
+    assert_equal [@post, @get3], requests
+
+    expected = ''
+    expected << http_get * 2
+
+    assert_equal expected, @socket.write_io.read
+  end
+
+  def test_pipeline_send_non_idempotent
+    @socket = Buffer.new
+    @socket.start
+
+    requests = [@post, @get3]
+
+    in_flight = pipeline_send requests
+
+    @socket.finish
+
+    assert_equal [@post], in_flight
+    assert_equal [@get3], requests
+
+    expected = http_post
+
+    assert_equal expected, @socket.write_io.read
   end
 
 end

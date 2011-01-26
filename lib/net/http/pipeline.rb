@@ -132,22 +132,10 @@ module Net::HTTP::Pipeline
 
     pipeline_check requests, responses unless @persistent
 
-    requests.each do |req|
-      begin_transport req
-      req.exec @socket, @curr_http_version, edit_path(req.path)
-    end
+    until requests.empty? do
+      in_flight = pipeline_send requests
 
-    requests.each do |req|
-      begin
-        res = Net::HTTPResponse.read_new @socket
-      end while res.kind_of? Net::HTTPContinue
-
-      res.reading_body @socket, req.response_body_permitted? do
-        responses << res
-        yield res if block_given?
-      end
-
-      pipeline_end_transport res
+      pipeline_receive in_flight, responses
     end
 
     responses
@@ -198,6 +186,58 @@ module Net::HTTP::Pipeline
     def pipeline_keep_alive? res
       not res['connection'].to_s =~ /close/i
     end
+  end
+
+  ##
+  # Receives HTTP responses for +in_flight+ requests and adds them to
+  # +responses+
+
+  def pipeline_receive in_flight, responses
+    in_flight.each do |req|
+      begin
+        res = Net::HTTPResponse.read_new @socket
+      end while res.kind_of? Net::HTTPContinue
+
+      res.reading_body @socket, req.response_body_permitted? do
+        responses << res
+        yield res if block_given?
+      end
+
+      pipeline_end_transport res
+    end
+
+    responses
+  end
+
+  ##
+  # Sends +requests+ to the HTTP server and removes them from the +requests+
+  # list.  Returns the requests that have been pipelined and are in-flight.
+  #
+  # If a non-idempotent request is first in +requests+ it will be sent and no
+  # further requests will be pipelined.
+  #
+  # If a non-idempotent request is encountered after an idempotent request it
+  # will not be sent.
+
+  def pipeline_send requests
+    in_flight = []
+
+    while req = requests.shift do
+      idempotent = idempotent? req
+
+      unless idempotent or in_flight.empty? then
+        requests.unshift req
+        break
+      end
+
+      begin_transport req
+      req.exec @socket, @curr_http_version, edit_path(req.path)
+      in_flight << req
+
+      break unless idempotent
+    end
+
+    in_flight
   end
 
 end

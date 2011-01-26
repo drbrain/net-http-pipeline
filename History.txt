@@ -2,7 +2,9 @@
 
 * API change
   * Net::HTTP::Pipeline#pipeline requires an Array of Net::HTTPRequests now.
-
+* Major enhancement
+  * If a sequence of requests contains a non-idempotent request #pipeline now
+    waits for a response to the previous request.
 * Minor enhancements
   * Check for HTTP/1.1 and persistent connections before attempting
     pipelining
