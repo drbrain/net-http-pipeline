@@ -1,25 +1,27 @@
 require 'net/http'
 
 ##
-# An HTTP/1.1 pipelining implementation atop Net::HTTP.  Currently this is not
-# compliant with RFC 2616 8.1.2.2.
+# An HTTP/1.1 pipelining implementation atop Net::HTTP.  Currently this
+# library is not compliant with RFC 2616 8.1.2.2.
 #
 # Pipeline allows you to create a bunch of requests then send them all to an
 # HTTP/1.1 server without waiting for responses.  The server will return HTTP
 # responses in-order.
 #
-# Net::HTTP::Pipeline does not assume the server is pipelining-capable.  If
-# you know it is you can set Net::HTTP#persistent to true.
+# Net::HTTP::Pipeline does not assume the server supports pipelining.  If you
+# know it is you can set Net::HTTP#pipelining to true.
 #
 # = Example
 #
 #   require 'net/http/pipeline'
 #
 #   Net::HTTP.start 'localhost' do |http|
-#     req1 = Net::HTTP::Get.new '/'
-#     req2 = Net::HTTP::Get.new '/'
+#     requests = []
+#     requests << Net::HTTP::Get.new('/')
+#     requests << Net::HTTP::Get.new('/')
+#     requests << Net::HTTP::Get.new('/')
 #
-#     http.pipeline req1, req2 do |res|
+#     http.pipeline requests do |res|
 #       puts res.code
 #       puts res.body[0..60].inspect
 #       puts
@@ -91,16 +93,16 @@ module Net::HTTP::Pipeline
   end
 
   ##
-  # Persistence accessor.
+  # Pipelining capability accessor.
   #
-  # Pipeline assumes servers will not make persistent connections by default.
-  # The first request is not pipelined while Pipeline ensures that the server
-  # is HTTP/1.1 or newer and defaults to persistent connections.
+  # Pipeline assumes servers do not support pipelining by default.  The first
+  # request is not pipelined while Pipeline ensures that the server is
+  # HTTP/1.1 or newer and defaults to persistent connections.
   #
-  # If you know the server is both HTTP/1.1 and defaults to persistent
+  # If you know the server is HTTP/1.1 and defaults to persistent
   # connections you can set this to true when you create the Net::HTTP object.
 
-  attr_accessor :persistent
+  attr_accessor :pipelining
 
   ##
   # Is +req+ idempotent according to RFC 2616?
@@ -117,7 +119,7 @@ module Net::HTTP::Pipeline
   # Pipelines +requests+ to the HTTP server yielding responses if a block is
   # given.  Returns all responses recieved.
   #
-  # Raises an exception if the connection is not pipelining-capable or if the
+  # Raises an exception if the connection is not pipeline-capable or if the
   # HTTP session has not been started.
 
   def pipeline requests
@@ -128,9 +130,9 @@ module Net::HTTP::Pipeline
 
     raise VersionError.new(requests, responses) if '1.1' > @curr_http_version
 
-    @persistent = false unless instance_variable_defined? :@persistent
+    @pipelining = false unless instance_variable_defined? :@pipelining
 
-    pipeline_check requests, responses unless @persistent
+    pipeline_check requests, responses unless @pipelining
 
     until requests.empty? do
       in_flight = pipeline_send requests
@@ -147,14 +149,15 @@ module Net::HTTP::Pipeline
 
       yield res if block_given?
 
-      @persistent = pipeline_keep_alive? res
+      @pipelining = pipeline_keep_alive? res
     end
 
     return if responses if requests.empty?
 
     if '1.1' > @curr_http_version then
+      @pipelining = false
       raise VersionError.new(requests, responses)
-    elsif not @persistent then
+    elsif not @pipelining then
       raise PersistenceError.new(requests, responses)
     end
   end

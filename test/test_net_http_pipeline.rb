@@ -152,7 +152,9 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     @socket.read_io.write http_response('Worked 2!')
     @socket.start
 
-    responses = pipeline [@get1, @get2]
+    requests = [@get1, @get2]
+
+    responses = pipeline requests
 
     @socket.finish
 
@@ -163,6 +165,8 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
 
     assert_equal 'Worked 1!', responses.first.body
     assert_equal 'Worked 2!', responses.last.body
+
+    assert_empty requests
   end
 
   def test_pipeline_http_1_0
@@ -254,6 +258,7 @@ Worked 1!
     assert_equal [@get2], requests
     assert_equal 1, responses.length
     assert_equal 'Worked 1!', responses.first.body
+    assert @pipelining
   end
 
   def test_pipeline_check_http_1_0
@@ -273,6 +278,7 @@ Worked 1!
     assert_equal [@get2], e.requests
     assert_equal 1, e.responses.length
     assert_equal 'Worked 1!', e.responses.first.body
+    refute @pipelining
   end
 
   def test_pipeline_check_non_persistent
@@ -287,6 +293,7 @@ Worked 1!
     assert_equal [@get2], e.requests
     assert_equal 1, e.responses.length
     assert_equal 'Worked 1!', e.responses.first.body
+    refute @pipelining
   end
 
   def test_pipeline_end_transport
