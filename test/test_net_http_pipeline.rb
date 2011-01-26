@@ -169,6 +169,23 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     assert_empty requests
   end
 
+  def test_pipeline_block
+    @socket = Buffer.new
+    @socket.read_io.write http_response('Worked 1!')
+    @socket.read_io.write http_response('Worked 2!')
+    @socket.start
+
+    requests = [@get1, @get2]
+    responses = []
+
+    pipeline requests do |response| responses << response end
+
+    @socket.finish
+
+    assert_equal 'Worked 1!', responses.first.body
+    assert_equal 'Worked 2!', responses.last.body
+  end
+
   def test_pipeline_http_1_0
     @curr_http_version = '1.0'
 
@@ -362,6 +379,7 @@ Worked 1!
 
     assert_equal 'Worked 1!', responses.first.body
     assert_equal 'Worked 2!', responses.last.body
+
     assert_same r, responses
   end
 

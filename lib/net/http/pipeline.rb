@@ -138,7 +138,7 @@ module Net::HTTP::Pipeline
   # Raises an exception if the connection is not pipeline-capable or if the
   # HTTP session has not been started.
 
-  def pipeline requests
+  def pipeline requests, &block # :yields: response
     responses = []
 
     raise Error.new('Net::HTTP not started', requests, responses) unless
@@ -146,12 +146,12 @@ module Net::HTTP::Pipeline
 
     raise VersionError.new(requests, responses) if '1.1' > @curr_http_version
 
-    pipeline_check requests, responses
+    pipeline_check requests, responses, &block
 
     until requests.empty? do
       in_flight = pipeline_send requests
 
-      pipeline_receive in_flight, responses
+      pipeline_receive in_flight, responses, &block
     end
 
     responses
