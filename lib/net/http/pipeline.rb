@@ -31,7 +31,7 @@ module Net::HTTP::Pipeline
   ##
   # The version of net-http-pipeline you are using
 
-  VERSION = '0.2'
+  VERSION = '1.0'
 
   ##
   # Pipeline error class
@@ -103,13 +103,24 @@ module Net::HTTP::Pipeline
   attr_accessor :persistent
 
   ##
+  # Is +req+ idempotent according to RFC 2616?
+
+  def idempotent? req
+    case req
+    when Net::HTTP::Delete, Net::HTTP::Get, Net::HTTP::Head,
+         Net::HTTP::Options, Net::HTTP::Put, Net::HTTP::Trace then
+      true
+    end
+  end
+
+  ##
   # Pipelines +requests+ to the HTTP server yielding responses if a block is
   # given.  Returns all responses recieved.
   #
   # Raises an exception if the connection is not pipelining-capable or if the
   # HTTP session has not been started.
 
-  def pipeline *requests
+  def pipeline requests
     responses = []
 
     raise Error.new('Net::HTTP not started', requests, responses) unless
@@ -119,23 +130,7 @@ module Net::HTTP::Pipeline
 
     @persistent = false unless instance_variable_defined? :@persistent
 
-    unless @persistent then
-      request requests.shift do |res|
-        responses << res
-
-        yield res if block_given?
-
-        @persistent = pipeline_keep_alive? res
-      end
-
-      return if responses if requests.empty?
-
-      if '1.1' > @curr_http_version then
-        raise VersionError.new(requests, responses)
-      elsif not @persistent then
-        raise PersistenceError.new(requests, responses)
-      end
-    end
+    pipeline_check requests, responses unless @persistent
 
     requests.each do |req|
       begin_transport req
@@ -156,6 +151,24 @@ module Net::HTTP::Pipeline
     end
 
     responses
+  end
+
+  def pipeline_check requests, responses
+    request requests.shift do |res|
+      responses << res
+
+      yield res if block_given?
+
+      @persistent = pipeline_keep_alive? res
+    end
+
+    return if responses if requests.empty?
+
+    if '1.1' > @curr_http_version then
+      raise VersionError.new(requests, responses)
+    elsif not @persistent then
+      raise PersistenceError.new(requests, responses)
+    end
   end
 
   ##

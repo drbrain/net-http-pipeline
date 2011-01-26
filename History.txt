@@ -1,6 +1,9 @@
-=== 0.2 / ??
+=== 1.0 / ??
 
-* Minor enhancement
+* API change
+  * Net::HTTP::Pipeline#pipeline requires an Array of Net::HTTPRequests now.
+
+* Minor enhancements
   * Check for HTTP/1.1 and persistent connections before attempting
     pipelining
   * Added Net::HTTP#persistent= to avoid pipelining-capability check.

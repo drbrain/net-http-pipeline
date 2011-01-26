@@ -4,6 +4,8 @@ require 'stringio'
 
 class TestNetHttpPipeline < MiniTest::Unit::TestCase
 
+  include Net::HTTP::Pipeline
+
   def setup
     @curr_http_version = '1.1'
     @started = true
@@ -57,8 +59,6 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
       @write_io.write data
     end
   end
-
-  include Net::HTTP::Pipeline
 
   attr_writer :started
 
@@ -121,13 +121,26 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
 
   # tests start
 
+  def test_idempotent_eh
+    http = Net::HTTP.new 'localhost'
+
+    assert http.idempotent? Net::HTTP::Delete.new '/'
+    assert http.idempotent? Net::HTTP::Get.new '/'
+    assert http.idempotent? Net::HTTP::Head.new '/'
+    assert http.idempotent? Net::HTTP::Options.new '/'
+    assert http.idempotent? Net::HTTP::Put.new '/'
+    assert http.idempotent? Net::HTTP::Trace.new '/'
+
+    refute http.idempotent? Net::HTTP::Post.new '/'
+  end
+
   def test_pipeline
     @socket = Buffer.new
     @socket.read_io.write http_response('Worked 1!')
     @socket.read_io.write http_response('Worked 2!')
     @socket.start
 
-    responses = pipeline @req1, @req2
+    responses = pipeline [@req1, @req2]
 
     @socket.finish
 
@@ -150,7 +163,7 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     @socket.start
 
     e = assert_raises Net::HTTP::Pipeline::VersionError do
-      pipeline @req1, @req2
+      pipeline [@req1, @req2]
     end
 
     assert_equal [@req1, @req2], e.requests
@@ -165,7 +178,7 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     @socket.start
 
     e = assert_raises Net::HTTP::Pipeline::PersistenceError do
-      pipeline @req1, @req2
+      pipeline [@req1, @req2]
     end
 
     assert_equal [@req2], e.requests
@@ -177,13 +190,35 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     @started = false
 
     e = assert_raises Net::HTTP::Pipeline::Error do
-      pipeline
+      pipeline []
     end
 
     assert_equal 'Net::HTTP not started', e.message
   end
 
-  def test_pipeline_unknown_http_1_0
+  # end #pipeline tests
+
+  def test_pipeline_check
+    @socket = Buffer.new
+    @socket.read_io.write <<-HTTP_1_0
+HTTP/1.1 200 OK\r
+Content-Length: 9\r
+\r
+Worked 1!
+    HTTP_1_0
+    @socket.start
+
+    requests = [@req1, @req2]
+    responses = []
+
+    pipeline_check requests, responses
+
+    assert_equal [@req2], requests
+    assert_equal 1, responses.length
+    assert_equal 'Worked 1!', responses.first.body
+  end
+
+  def test_pipeline_check_http_1_0
     @socket = Buffer.new
     @socket.read_io.write <<-HTTP_1_0
 HTTP/1.0 200 OK\r
@@ -194,7 +229,7 @@ Worked 1!
     @socket.start
 
     e = assert_raises Net::HTTP::Pipeline::VersionError do
-      pipeline @req1, @req2
+      pipeline_check [@req1, @req2], []
     end
 
     assert_equal [@req2], e.requests
@@ -202,21 +237,19 @@ Worked 1!
     assert_equal 'Worked 1!', e.responses.first.body
   end
 
-  def test_pipeline_unknown_non_persistent
+  def test_pipeline_check_non_persistent
     @socket = Buffer.new
     @socket.read_io.write http_response('Worked 1!', 'Connection: close')
     @socket.start
 
     e = assert_raises Net::HTTP::Pipeline::PersistenceError do
-      pipeline @req1, @req2
+      pipeline_check [@req1, @req2], []
     end
 
     assert_equal [@req2], e.requests
     assert_equal 1, e.responses.length
     assert_equal 'Worked 1!', e.responses.first.body
   end
-
-  # end #pipeline tests
 
   def test_pipeline_end_transport
     @curr_http_version = nil
