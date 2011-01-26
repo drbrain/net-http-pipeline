@@ -133,6 +133,8 @@ module Net::HTTP::Pipeline
   # Pipelines +requests+ to the HTTP server yielding responses if a block is
   # given.  Returns all responses recieved.
   #
+  # The Net::HTTP connection must be started before calling #pipeline.
+  #
   # Raises an exception if the connection is not pipeline-capable or if the
   # HTTP session has not been started.
 

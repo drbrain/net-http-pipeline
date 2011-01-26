@@ -212,22 +212,6 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     assert responses.empty?
   end
 
-  def test_pipeline_non_persistent
-    @persistent = false
-
-    @socket = Buffer.new
-    @socket.read_io.write http_response('Worked 1!', 'Connection: close')
-    @socket.start
-
-    e = assert_raises Net::HTTP::Pipeline::PersistenceError do
-      pipeline [@get1, @get2]
-    end
-
-    assert_equal [@get2], e.requests
-    assert_equal 1, e.responses.length
-    assert_equal 'Worked 1!', e.responses.first.body
-  end
-
   def test_pipeline_not_started
     @started = false
 
@@ -361,6 +345,24 @@ Worked 1!
     res.header['connection'] = ['close']
 
     refute pipeline_keep_alive? res
+  end
+
+  def test_pipeline_receive
+    @socket = Buffer.new
+    @socket.read_io.write http_response('Worked 1!')
+    @socket.read_io.write http_response('Worked 2!')
+    @socket.start
+
+    in_flight = [@get1, @get2]
+    responses = []
+
+    r = pipeline_receive in_flight, responses
+
+    @socket.finish
+
+    assert_equal 'Worked 1!', responses.first.body
+    assert_equal 'Worked 2!', responses.last.body
+    assert_same r, responses
   end
 
   def test_pipeline_send
