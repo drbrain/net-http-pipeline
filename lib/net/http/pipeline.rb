@@ -262,7 +262,7 @@ module Net::HTTP::Pipeline
         end
 
         pipeline_end_transport res
-      rescue
+      rescue StandardError, Timeout::Error
         in_flight.unshift req
         raise
       end

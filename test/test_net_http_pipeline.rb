@@ -62,14 +62,15 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     end
   end
 
-  class ResetBuffer < Buffer
-    def initialize
+  class ErrorBuffer < Buffer
+    def initialize exception
       @readline = false
-      super
+      @exception = exception
+      super()
     end
 
     def readline
-      raise Errno::ECONNRESET if @readline
+      raise @exception if @readline
       @readline = true
       super
     end
@@ -406,7 +407,7 @@ Worked 1!
   end
 
   def test_pipeline_receive_bad_response
-    @socket = ResetBuffer.new
+    @socket = ErrorBuffer.new Errno::ECONNRESET
     @socket.read_io.write http_response('Worked 1!')
     @socket.start
 
@@ -424,6 +425,27 @@ Worked 1!
     assert_equal 'Worked 1!', e.responses.first.body
 
     assert_kind_of Errno::ECONNRESET, e.original
+  end
+
+  def test_pipeline_receive_timeout
+    @socket = ErrorBuffer.new Timeout::Error
+    @socket.read_io.write http_response('Worked 1!')
+    @socket.start
+
+    in_flight = [@get1, @get2]
+    responses = []
+
+    e = assert_raises Net::HTTP::Pipeline::ResponseError do
+      pipeline_receive in_flight, responses
+    end
+
+    @socket.finish
+
+    assert_equal [@get2], e.requests
+    assert_equal 1, e.responses.length
+    assert_equal 'Worked 1!', e.responses.first.body
+
+    assert_kind_of Timeout::Error, e.original
   end
 
   def test_pipeline_send
