@@ -21,7 +21,10 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
 
   class Buffer
     attr_accessor :read_io, :write_io
-    def initialize
+    def initialize exception = nil, immediate = false
+      @readline = immediate
+      @exception = exception
+
       @read_io = StringIO.new
       @write_io = StringIO.new
       @closed = false
@@ -46,6 +49,8 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     end
 
     def readline
+      raise @exception if @exception and @readline
+      @readline = true
       @read_io.readline.chomp "\r\n"
     end
 
@@ -59,20 +64,6 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
 
     def write data
       @write_io.write data
-    end
-  end
-
-  class ErrorBuffer < Buffer
-    def initialize exception, immediate = false
-      @readline = immediate
-      @exception = exception
-      super()
-    end
-
-    def readline
-      raise @exception if @readline
-      @readline = true
-      super
     end
   end
 
@@ -270,7 +261,8 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
   end
 
   def test_pipeline_retry
-    @error_socket = ErrorBuffer.new Errno::ECONNRESET
+    self.pipelining = true
+    @error_socket = Buffer.new Errno::ECONNRESET
     @error_socket.read_io.write http_response('Worked 1!')
     @error_socket.start
 
@@ -306,10 +298,10 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     assert_empty requests
   end
 
-  def test_pipeline_retry_post
+  def test_pipeline_retry_fail_post
     self.pipelining = true
 
-    @socket = ErrorBuffer.new Errno::ECONNRESET, true
+    @socket = Buffer.new Errno::ECONNRESET, true
     @socket.start
 
     requests = [@post]
@@ -327,13 +319,61 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     assert_equal [@post], e.requests
   end
 
-  def test_pipeline_retry_fail
-    @error_socket = ErrorBuffer.new Errno::ECONNRESET
+  def test_pipeline_retry_fail_different
+    self.pipelining = true
+    @error_socket = Buffer.new Errno::ECONNRESET
     @error_socket.read_io.write http_response('Worked 1!')
     @error_socket.start
 
-    @error_socket2 = ErrorBuffer.new Errno::ECONNRESET
+    @error_socket2 = Buffer.new Errno::ECONNRESET
     @error_socket2.read_io.write http_response('Worked 2!')
+    @error_socket2.start
+
+    @good_socket = Buffer.new
+    @good_socket.read_io.write http_response('Worked 3!')
+    @good_socket.start
+
+    @socket = @error_socket
+
+    @sockets = [@error_socket2, @good_socket]
+
+    def start
+      @socket = @sockets.shift
+    end
+
+    requests = [@get1, @get2, @get3]
+
+    responses = pipeline requests
+
+    @error_socket.finish
+    @error_socket2.finish
+    @good_socket.finish
+
+    assert_equal http_get * 3, @error_socket.write_io.read
+    assert @error_socket.closed?
+
+    assert_equal http_get * 2, @error_socket2.write_io.read
+    assert @error_socket2.closed?
+
+    assert_equal http_get, @good_socket.write_io.read
+    refute @good_socket.closed?
+
+    assert_equal 'Worked 1!', responses.shift.body
+    assert_equal 'Worked 2!', responses.shift.body
+    assert_equal 'Worked 3!', responses.shift.body
+    assert_empty responses
+
+    assert_empty requests
+  end
+
+  def test_pipeline_retry_fail_same
+    self.pipelining = true
+
+    @error_socket = Buffer.new Errno::ECONNRESET
+    @error_socket.read_io.write http_response('Worked 1!')
+    @error_socket.start
+
+    @error_socket2 = Buffer.new Errno::ECONNRESET, true
     @error_socket2.start
 
     @socket = @error_socket
@@ -359,11 +399,9 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
 
     responses = e.responses
     assert_equal 'Worked 1!', responses.shift.body
-    assert_equal 'Worked 2!', responses.shift.body
     assert_empty responses
 
-    assert_equal [@get3], e.requests
-    assert_equal [@get3], requests
+    assert_equal [@get2, @get3], e.requests
   end
 
   # end #pipeline tests
@@ -513,7 +551,7 @@ Worked 1!
   end
 
   def test_pipeline_receive_bad_response
-    @socket = ErrorBuffer.new Errno::ECONNRESET
+    @socket = Buffer.new Errno::ECONNRESET
     @socket.read_io.write http_response('Worked 1!')
     @socket.start
 
@@ -536,7 +574,7 @@ Worked 1!
   end
 
   def test_pipeline_receive_timeout
-    @socket = ErrorBuffer.new Timeout::Error
+    @socket = Buffer.new Timeout::Error
     @socket.read_io.write http_response('Worked 1!')
     @socket.start
 

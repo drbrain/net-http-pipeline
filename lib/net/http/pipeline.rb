@@ -169,7 +169,7 @@ module Net::HTTP::Pipeline
 
     pipeline_check requests, responses, &block
 
-    retried = false
+    retried = responses.length
 
     until requests.empty? do
       begin
@@ -181,9 +181,9 @@ module Net::HTTP::Pipeline
           requests.unshift request
         end
 
-        raise if retried or not idempotent? requests.first
+        raise if responses.length == retried or not idempotent? requests.first
 
-        retried = true
+        retried = responses.length
 
         pipeline_reset requests, responses
 
