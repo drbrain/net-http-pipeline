@@ -169,10 +169,26 @@ module Net::HTTP::Pipeline
 
     pipeline_check requests, responses, &block
 
-    until requests.empty? do
-      in_flight = pipeline_send requests
+    retried = false
 
-      pipeline_receive in_flight, responses, &block
+    until requests.empty? do
+      begin
+        in_flight = pipeline_send requests
+
+        pipeline_receive in_flight, responses, &block
+      rescue Net::HTTP::Pipeline::ResponseError => e
+        e.requests.reverse_each do |request|
+          requests.unshift request
+        end
+
+        raise if retried
+
+        retried = true
+
+        pipeline_reset requests, responses
+
+        retry
+      end
     end
 
     responses
@@ -272,6 +288,25 @@ module Net::HTTP::Pipeline
   rescue Timeout::Error, EOFError, Errno::ECONNABORTED, Errno::ECONNRESET,
          Errno::EPIPE, Net::HTTPBadResponse => e
     raise ResponseError.new(e, in_flight, responses)
+  end
+
+  ##
+  # Resets this connection
+
+  def pipeline_reset requests, responses
+    begin
+      finish
+    rescue IOError
+    end
+
+    begin
+      start
+    rescue Errno::ECONNREFUSED
+      raise Error.new("connection refused: #{address}:#{port}", requests,
+                      responses)
+    rescue Errno::EHOSTDOWN
+      raise Error.new("host down: #{address}:#{port}", requests, responses)
+    end
   end
 
   ##

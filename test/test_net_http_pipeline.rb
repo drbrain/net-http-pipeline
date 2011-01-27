@@ -87,6 +87,9 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     path
   end
 
+  def finish
+  end
+
   def http_get
     get = []
     get << 'GET / HTTP/1.1'
@@ -150,6 +153,9 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     r.instance_variable_set :@header, {}
     def r.header() @header end
     r
+  end
+
+  def start
   end
 
   def started?() @started end
@@ -260,6 +266,47 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     end
 
     assert_equal 'Net::HTTP not started', e.message
+  end
+
+  def test_pipeline_retry
+    @error_socket = ErrorBuffer.new Errno::ECONNRESET
+    @error_socket.read_io.write http_response('Worked 1!')
+    @error_socket.start
+
+    @good_socket = Buffer.new
+    @good_socket.read_io.write http_response('Worked 2!')
+    @good_socket.read_io.write http_response('Worked 3!')
+    @good_socket.start
+
+    @socket = @error_socket
+
+    def start
+      @socket = @good_socket
+    end
+
+    def finish
+      @socket.close
+    end
+
+    requests = [@get1, @get2, @get3]
+
+    responses = pipeline requests
+
+    @error_socket.finish
+    @good_socket.finish
+
+    assert_equal http_get * 3, @error_socket.write_io.read
+    assert @error_socket.closed?
+
+    assert_equal http_get * 2, @good_socket.write_io.read
+    refute @good_socket.closed?
+
+    assert_equal 'Worked 1!', responses.shift.body
+    assert_equal 'Worked 2!', responses.shift.body
+    assert_equal 'Worked 3!', responses.shift.body
+    assert_empty responses
+
+    assert_empty requests
   end
 
   # end #pipeline tests
