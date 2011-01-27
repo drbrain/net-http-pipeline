@@ -408,12 +408,7 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
 
   def test_pipeline_check
     @socket = Buffer.new
-    @socket.read_io.write <<-HTTP_1_0
-HTTP/1.1 200 OK\r
-Content-Length: 9\r
-\r
-Worked 1!
-    HTTP_1_0
+    @socket.read_io.write http_response('Worked 1!')
     @socket.start
 
     requests = [@get1, @get2]
