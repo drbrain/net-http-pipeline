@@ -5,8 +5,9 @@
 
 == DESCRIPTION:
 
-An HTTP/1.1 pipelining implementation atop Net::HTTP.  This is an experimental
-proof of concept.
+An HTTP/1.1 pipelining implementation atop Net::HTTP.  A pipelined connection
+sends multiple requests to the HTTP server without waiting for the responses.
+The server will respond in-order.
 
 == FEATURES/PROBLEMS:
 
@@ -21,8 +22,9 @@ proof of concept.
   Net::HTTP.start 'localhost' do |http|
     req1 = Net::HTTP::Get.new '/'
     req2 = Net::HTTP::Get.new '/'
+    req3 = Net::HTTP::Get.new '/'
 
-    http.pipeline req1, req2 do |res|
+    http.pipeline [req1, req2, req3] do |res|
       puts res.code
       puts res.body[0..60].inspect
       puts

@@ -1,8 +1,8 @@
 require 'net/http'
 
 ##
-# An HTTP/1.1 pipelining implementation atop Net::HTTP.  Currently this
-# library is not compliant with RFC 2616 8.1.2.2.
+# An HTTP/1.1 pipelining implementation atop Net::HTTP.  This library is
+# compliant with RFC 2616 8.1.2.2.
 #
 # Pipeline allows you to create a bunch of requests then send them all to an
 # HTTP/1.1 server without waiting for responses.  The server will return HTTP
