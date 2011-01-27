@@ -181,7 +181,7 @@ module Net::HTTP::Pipeline
           requests.unshift request
         end
 
-        raise if retried
+        raise if retried or not idempotent? requests.first
 
         retried = true
 
@@ -248,6 +248,14 @@ module Net::HTTP::Pipeline
     end
   end
 
+  ##
+  # Closes the connection and rescues any IOErrors this may cause
+
+  def pipeline_finish
+    finish
+  rescue IOError
+  end
+
   if Net::HTTPResponse.allocate.respond_to? :connection_close? then
     ##
     # Checks for an connection close header
@@ -287,6 +295,8 @@ module Net::HTTP::Pipeline
     responses
   rescue Timeout::Error, EOFError, Errno::ECONNABORTED, Errno::ECONNRESET,
          Errno::EPIPE, Net::HTTPBadResponse => e
+    pipeline_finish
+
     raise ResponseError.new(e, in_flight, responses)
   end
 
@@ -294,19 +304,14 @@ module Net::HTTP::Pipeline
   # Resets this connection
 
   def pipeline_reset requests, responses
-    begin
-      finish
-    rescue IOError
-    end
+    pipeline_finish
 
-    begin
-      start
-    rescue Errno::ECONNREFUSED
-      raise Error.new("connection refused: #{address}:#{port}", requests,
-                      responses)
-    rescue Errno::EHOSTDOWN
-      raise Error.new("host down: #{address}:#{port}", requests, responses)
-    end
+    start
+  rescue Errno::ECONNREFUSED
+    raise Error.new("connection refused: #{address}:#{port}", requests,
+                    responses)
+  rescue Errno::EHOSTDOWN
+    raise Error.new("host down: #{address}:#{port}", requests, responses)
   end
 
   ##

@@ -63,8 +63,8 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
   end
 
   class ErrorBuffer < Buffer
-    def initialize exception
-      @readline = false
+    def initialize exception, immediate = false
+      @readline = immediate
       @exception = exception
       super()
     end
@@ -88,6 +88,7 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
   end
 
   def finish
+    @socket.close
   end
 
   def http_get
@@ -284,10 +285,6 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
       @socket = @good_socket
     end
 
-    def finish
-      @socket.close
-    end
-
     requests = [@get1, @get2, @get3]
 
     responses = pipeline requests
@@ -309,6 +306,27 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     assert_empty requests
   end
 
+  def test_pipeline_retry_post
+    self.pipelining = true
+
+    @socket = ErrorBuffer.new Errno::ECONNRESET, true
+    @socket.start
+
+    requests = [@post]
+
+    e = assert_raises Net::HTTP::Pipeline::ResponseError do
+      pipeline requests
+    end
+
+    @socket.finish
+
+    assert_equal http_post, @socket.write_io.read
+
+    assert_empty e.responses
+
+    assert_equal [@post], e.requests
+  end
+
   def test_pipeline_retry_fail
     @error_socket = ErrorBuffer.new Errno::ECONNRESET
     @error_socket.read_io.write http_response('Worked 1!')
@@ -324,10 +342,6 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
       @socket = @error_socket2
     end
 
-    def finish
-      @socket.close
-    end
-
     requests = [@get1, @get2, @get3]
 
     e = assert_raises Net::HTTP::Pipeline::ResponseError do
@@ -341,7 +355,7 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     assert @error_socket.closed?
 
     assert_equal http_get * 2, @error_socket2.write_io.read
-    refute @error_socket2.closed?
+    assert @error_socket2.closed?
 
     responses = e.responses
     assert_equal 'Worked 1!', responses.shift.body
@@ -490,6 +504,8 @@ Worked 1!
 
     @socket.finish
 
+    refute @socket.closed?
+
     assert_equal 'Worked 1!', responses.first.body
     assert_equal 'Worked 2!', responses.last.body
 
@@ -509,6 +525,8 @@ Worked 1!
     end
 
     @socket.finish
+
+    assert @socket.closed?
 
     assert_equal [@get2], e.requests
     assert_equal 1, e.responses.length
@@ -530,6 +548,8 @@ Worked 1!
     end
 
     @socket.finish
+
+    assert @socket.closed?
 
     assert_equal [@get2], e.requests
     assert_equal 1, e.responses.length
