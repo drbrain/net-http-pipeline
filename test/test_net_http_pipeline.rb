@@ -309,6 +309,49 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     assert_empty requests
   end
 
+  def test_pipeline_retry_fail
+    @error_socket = ErrorBuffer.new Errno::ECONNRESET
+    @error_socket.read_io.write http_response('Worked 1!')
+    @error_socket.start
+
+    @error_socket2 = ErrorBuffer.new Errno::ECONNRESET
+    @error_socket2.read_io.write http_response('Worked 2!')
+    @error_socket2.start
+
+    @socket = @error_socket
+
+    def start
+      @socket = @error_socket2
+    end
+
+    def finish
+      @socket.close
+    end
+
+    requests = [@get1, @get2, @get3]
+
+    e = assert_raises Net::HTTP::Pipeline::ResponseError do
+      pipeline requests
+    end
+
+    @error_socket.finish
+    @error_socket2.finish
+
+    assert_equal http_get * 3, @error_socket.write_io.read
+    assert @error_socket.closed?
+
+    assert_equal http_get * 2, @error_socket2.write_io.read
+    refute @error_socket2.closed?
+
+    responses = e.responses
+    assert_equal 'Worked 1!', responses.shift.body
+    assert_equal 'Worked 2!', responses.shift.body
+    assert_empty responses
+
+    assert_equal [@get3], e.requests
+    assert_equal [@get3], requests
+  end
+
   # end #pipeline tests
 
   def test_pipeline_check
