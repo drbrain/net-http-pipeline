@@ -216,13 +216,30 @@ module Net::HTTP::Pipeline
       @pipelining = false
     end
 
-    request requests.shift do |res|
-      responses << res
+    req = requests.shift
+    retried = false
 
-      yield res if block_given?
+    begin
+      res = request req
+    rescue Timeout::Error, EOFError, Errno::ECONNABORTED, Errno::ECONNRESET,
+           Errno::EPIPE, Net::HTTPBadResponse => e
+      if retried then
+        requests.unshift req
+        raise ResponseError.new(e, requests, responses)
+      end
 
-      @pipelining = pipeline_keep_alive? res
+      retried = true
+
+      pipeline_reset requests, responses
+
+      retry
     end
+
+    responses << res
+
+    yield res if block_given?
+
+    @pipelining = pipeline_keep_alive? res
 
     if '1.1' > @curr_http_version then
       @pipelining = false

@@ -437,6 +437,30 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     refute pipelining
   end
 
+  def test_pipeline_check_bad_response
+    @socket = Buffer.new
+    @socket.read_io.write http_bad_response
+    @socket.start
+
+    @socket2 = Buffer.new
+    @socket2.read_io.write http_response('Worked 1!')
+    @socket2.start
+
+    def start
+      @socket = @socket2
+    end
+
+    requests = [@get1, @get2]
+    responses = []
+
+    pipeline_check requests, responses
+
+    assert_equal [@get2], requests
+    assert_equal 1, responses.length
+    assert_equal 'Worked 1!', responses.first.body
+    assert pipelining
+  end
+
   def test_pipeline_check_http_1_0
     @socket = Buffer.new
     @socket.read_io.write <<-HTTP_1_0
