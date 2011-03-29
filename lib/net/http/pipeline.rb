@@ -9,7 +9,8 @@ require 'net/http'
 # responses in-order.
 #
 # Net::HTTP::Pipeline does not assume the server supports pipelining.  If you
-# know it is you can set Net::HTTP#pipelining to true.
+# know the server supports pipelining you can set Net::HTTP#pipelining to
+# true.
 #
 # = Example
 #

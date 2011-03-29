@@ -1,4 +1,4 @@
-=== 1.0 / ??
+=== 1.0 / 2011-03-29
 
 * API change
   * Net::HTTP::Pipeline#pipeline requires an Array of Net::HTTPRequests now.
