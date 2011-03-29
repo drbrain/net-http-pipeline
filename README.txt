@@ -12,8 +12,6 @@ The server will respond in-order.
 == FEATURES/PROBLEMS:
 
 * Provides HTTP/1.1 pipelining
-* Does not implement request wrangling per RFC 2616 8.1.2.2
-* Does not handle errors
 
 == SYNOPSIS:
 
