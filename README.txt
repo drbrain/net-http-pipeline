@@ -1,6 +1,6 @@
 = net-http-pipeline
 
-* http://seattlerb.rubyforge.org/net-http-pipeline
+* http://docs.seattlerb.org/net-http-pipeline
 * http://github.com/drbrain/net-http-pipeline
 
 == DESCRIPTION:
