@@ -312,7 +312,7 @@ module Net::HTTP::Pipeline
 
     responses
   rescue Timeout::Error, EOFError, Errno::ECONNABORTED, Errno::ECONNRESET,
-         Errno::EPIPE, Net::HTTPBadResponse => e
+         Errno::EPIPE, Net::HTTPBadResponse, IOError => e
     pipeline_finish
 
     raise ResponseError.new(e, in_flight, responses)
