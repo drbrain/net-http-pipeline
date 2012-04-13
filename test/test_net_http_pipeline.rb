@@ -14,6 +14,17 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     @get2 = Net::HTTP::Get.new '/'
     @get3 = Net::HTTP::Get.new '/'
     @post = Net::HTTP::Post.new '/'
+
+    remove_start
+
+    def start
+    end
+  end
+
+  def remove_start
+    class << self
+      alias_method :old_start, :start if method_defined? :start
+    end
   end
 
   ##
@@ -147,9 +158,6 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     r
   end
 
-  def start
-  end
-
   def started?() @started end
 
   # tests start
@@ -273,6 +281,8 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
 
     @socket = @error_socket
 
+    remove_start
+
     def start
       @socket = @good_socket
     end
@@ -337,6 +347,8 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
 
     @sockets = [@error_socket2, @good_socket]
 
+    remove_start
+
     def start
       @socket = @sockets.shift
     end
@@ -377,6 +389,8 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     @error_socket2.start
 
     @socket = @error_socket
+
+    remove_start
 
     def start
       @socket = @error_socket2
@@ -446,6 +460,8 @@ class TestNetHttpPipeline < MiniTest::Unit::TestCase
     @socket2.read_io.write http_response('Worked 1!')
     @socket2.start
 
+    remove_start
+
     def start
       @socket = @socket2
     end
@@ -478,6 +494,23 @@ Worked 1!
     assert_equal [@get2], e.requests
     assert_equal 1, e.responses.length
     assert_equal 'Worked 1!', e.responses.first.body
+    refute pipelining
+  end
+
+  def test_pipeline_check_ioerror
+    @socket = Buffer.new IOError, true
+    @socket.read_io.write http_response('Worked 1!')
+    @socket.start
+
+    requests = [@get1, @get2]
+    responses = []
+
+    assert_raises Net::HTTP::Pipeline::ResponseError do
+      pipeline_check requests, responses
+    end
+
+    assert_equal [@get1, @get2], requests
+    assert_equal 0, responses.length
     refute pipelining
   end
 

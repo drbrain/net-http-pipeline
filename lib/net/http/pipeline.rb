@@ -223,7 +223,7 @@ module Net::HTTP::Pipeline
     begin
       res = request req
     rescue Timeout::Error, EOFError, Errno::ECONNABORTED, Errno::ECONNRESET,
-           Errno::EPIPE, Net::HTTPBadResponse => e
+           Errno::EPIPE, Net::HTTPBadResponse, IOError => e
       if retried then
         requests.unshift req
         raise ResponseError.new(e, requests, responses)

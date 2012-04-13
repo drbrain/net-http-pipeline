@@ -1,3 +1,9 @@
+=== 1.0.1 / 2012-04-13
+
+* Bug fixes
+  * IOError is now handled in pipeline_check in case you pipeline to a closed
+    socket.
+
 === 1.0 / 2011-03-29
 
 * API change
