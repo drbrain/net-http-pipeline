@@ -1,8 +1,8 @@
 === 1.0.1 / 2012-04-13
 
 * Bug fixes
-  * IOError is now handled in pipeline_check in case you pipeline to a closed
-    socket.
+  * IOError is now handled in pipeline_check and pipeline_receive in case you
+    pipeline to a closed socket.  Partial patch by Eric Wong.  Issue #2
 
 === 1.0 / 2011-03-29
 
