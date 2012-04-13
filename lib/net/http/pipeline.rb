@@ -34,7 +34,7 @@ module Net::HTTP::Pipeline
   ##
   # The version of net-http-pipeline you are using
 
-  VERSION = '1.0'
+  VERSION = '1.0.1'
 
   ##
   # Pipeline error class
