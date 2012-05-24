@@ -153,7 +153,7 @@ module Net::HTTP::Pipeline
 
   ##
   # Pipelines +requests+ to the HTTP server yielding responses if a block is
-  # given.  Returns all responses recieved.
+  # given.  Returns all responses received.
   #
   # The Net::HTTP connection must be started before calling #pipeline.
   #
