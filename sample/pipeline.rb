@@ -1,6 +1,6 @@
 require 'net/http/pipeline'
 
-http = Net::HTTP.new 'localhost'
+http = Net::HTTP.new 'example'
 http.set_debug_output $stderr # so you can see what is happening
 # http.pipelining = true # set this when localhost:80 is an HTTP/1.1 server
 

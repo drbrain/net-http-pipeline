@@ -17,10 +17,10 @@ The server will respond in-order.
 
   require 'net/http/pipeline'
 
-  Net::HTTP.start 'localhost' do |http|
-    req1 = Net::HTTP::Get.new '/'
-    req2 = Net::HTTP::Get.new '/'
-    req3 = Net::HTTP::Get.new '/'
+  Net::HTTP.start 'example' do |http|
+    req1 = Net::HTTP::Get.new '/?response_body=a'
+    req2 = Net::HTTP::Get.new '/?response_body=b'
+    req3 = Net::HTTP::Get.new '/?response_body=c'
 
     http.pipeline [req1, req2, req3] do |res|
       puts res.code
@@ -28,6 +28,11 @@ The server will respond in-order.
       puts
     end
   end
+
+Since pipelined requests must be return in submission order the responses
+will come in the same order as submission.  If http://example/ places the
++response_body+ parameter in the body of the response this will print "a" then
+"b" then "c".
 
 == INSTALL:
 

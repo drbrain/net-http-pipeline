@@ -16,11 +16,11 @@ require 'net/http'
 #
 #   require 'net/http/pipeline'
 #
-#   Net::HTTP.start 'localhost' do |http|
+#   Net::HTTP.start 'example' do |http|
 #     requests = []
-#     requests << Net::HTTP::Get.new('/')
-#     requests << Net::HTTP::Get.new('/')
-#     requests << Net::HTTP::Get.new('/')
+#     requests << Net::HTTP::Get.new('/?response_body=a')
+#     requests << Net::HTTP::Get.new('/?response_body=b')
+#     requests << Net::HTTP::Get.new('/?response_body=c')
 #
 #     http.pipeline requests do |res|
 #       puts res.code
@@ -28,6 +28,11 @@ require 'net/http'
 #       puts
 #     end
 #   end
+#
+# Since pipelined requests must be return in submission order the responses
+# will come in the same order as submission.  If http://example/ places the
+# +response_body+ parameter in the body of the response this will print "a"
+# then "b" then "c".
 
 module Net::HTTP::Pipeline
 
