@@ -301,7 +301,7 @@ module Net::HTTP::Pipeline
       begin
         begin
           res = Net::HTTPResponse.read_new @socket
-          res.decode_content = req.decode_content
+          res.decode_content = req.decode_content if req.respond_to?(:decode_content)
         end while res.kind_of? Net::HTTPContinue
 
         res.reading_body @socket, req.response_body_permitted? do
